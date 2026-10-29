@@ -1,0 +1,54 @@
+# Lecture 18 example: the warehouse dashboard, Streamlit in front of MySQL
+# and Redis.
+#
+#   cd lecture18
+#   docker compose up -d
+#   docker compose exec streamlit python app/seed.py      # once
+#   open http://localhost:8505
+#
+# lecture16/ and lecture17/ hold smaller examples that run the same base
+# image with a different command.
+
+services:
+  mysql:
+    image: mysql:latest
+    container_name: streamlit-mysql-container
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: OSUGoPokes
+      MYSQL_DATABASE: iem4723_streamlit
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:latest
+    container_name: streamlit-redis-container
+    restart: always
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis-data:/data
+
+  streamlit:
+    image: ghcr.io/disys-lab/streamlit-base:latest
+    container_name: streamlit-lecture18
+    restart: always
+    ports:
+      - "8505:8501"
+    volumes:
+      - ./app:/usr/src/app/app
+      - ../../mysql-dev/data:/usr/src/app/data:ro
+    depends_on:
+      - mysql
+      - redis
+    command: >
+      streamlit run app/main.py
+        --server.port 8501
+        --server.address 0.0.0.0
+        --server.headless true
+
+volumes:
+  mysql-data:
+  redis-data:
