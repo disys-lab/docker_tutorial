@@ -1,12 +1,13 @@
 """Lecture 17: widgets, layout, session state and forms.
 
-Run it with you have to be inside streamlit-dev:
+Run it from inside streamlit-dev/lecture17:
 
-    docker compose up -d --force-recreate
+    docker compose up -d
 
-Then open http://localhost:8502
+Then open http://localhost:8504
 """
-import pandas as pd
+import csv
+
 import streamlit as st
 
 st.title("Lecture 17: Widgets, Layout and State")
@@ -14,88 +15,102 @@ st.title("Lecture 17: Widgets, Layout and State")
 
 @st.cache_data
 def load_items():
-    return pd.read_csv("data/orders/Item.csv")
+    with open("data/orders/Item.csv", newline="") as f:
+        return list(csv.DictReader(f))
 
 
 items = load_items()
 
-# ---------------------------------------------------------------- widgets
 st.header("1. Widgets are variables")
 
-descriptions = sorted(items["Item_Description"].unique())
+# The list of item types, each one only once.
+descriptions = []
+for item in items:
+    if item["Item_Description"] not in descriptions:
+        descriptions.append(item["Item_Description"])
+descriptions.sort()
 
-with st.sidebar:
-    st.subheader("Filters")
-    chosen = st.multiselect("Description", descriptions, default=descriptions)
-    min_sales = st.slider("Minimum annual sales", 0, 7000, 0, step=100)
-    sort_desc = st.checkbox("Sort by sales, highest first", value=True)
+st.sidebar.subheader("Filters")
+chosen = st.sidebar.multiselect("Description", descriptions, default=descriptions)
+min_sales = st.sidebar.slider("Minimum annual sales", 0, 7000, 0, step=100)
+sort_desc = st.sidebar.checkbox("Sort by sales, highest first", value=True)
 
-filtered = items[items["Item_Description"].isin(chosen) &
-                 (items["Item_AnnualSales"] >= min_sales)]
+st.write("chosen is a list:", chosen)
+st.write("min_sales is a number:", min_sales)
+st.write("sort_desc is True or False:", sort_desc)
+
+# Keep the items that match both filters.
+filtered = []
+for item in items:
+    if item["Item_Description"] in chosen:
+        if int(item["Item_AnnualSales"]) >= min_sales:
+            filtered.append(item)
+
+
+def sales_of(item):
+    return int(item["Item_AnnualSales"])
+
+
 if sort_desc:
-    filtered = filtered.sort_values("Item_AnnualSales", ascending=False)
-
-st.write(f"`chosen` is a {type(chosen).__name__}, "
-         f"`min_sales` is an {type(min_sales).__name__}, "
-         f"`sort_desc` is a {type(sort_desc).__name__}.")
+    filtered.sort(key=sales_of, reverse=True)
 
 st.metric("Items matching the filter", len(filtered))
 st.dataframe(filtered, width="stretch")
 
-# ---------------------------------------------------------------- layout
 st.header("2. Layout")
 
+chart_rows = []
+for item in filtered:
+    chart_rows.append({
+        "Item": item["Item_ID"],
+        "Sales": int(item["Item_AnnualSales"]),
+    })
+
 tab_chart, tab_data, tab_notes = st.tabs(["Chart", "Raw data", "Notes"])
+tab_chart.bar_chart(chart_rows, x="Item", y="Sales")
+tab_data.dataframe(filtered, width="stretch")
+tab_notes.markdown(
+    "Tabs hold alternative views of the same thing. Columns hold things "
+    "that belong side by side. The sidebar holds the controls."
+)
 
-with tab_chart:
-    st.bar_chart(filtered, x="Item_ID", y="Item_AnnualSales")
-
-with tab_data:
-    st.dataframe(filtered, width="stretch")
-
-with tab_notes:
-    st.markdown(
-        "Tabs hold alternative views of the same thing. Columns hold things "
-        "that belong side by side. The sidebar holds the controls."
-    )
-
-# ---------------------------------------------------------------- state
 st.header("3. Session state")
 
 st.markdown("A plain variable cannot survive a rerun. Session state can.")
 
-broken_count = 0            # reset on every rerun, so this never passes 1
+broken_count = 0
 
 if "count" not in st.session_state:
     st.session_state.count = 0
 
 
-def increment_by(n):
-    st.session_state.count += n
+def add_five():
+    st.session_state.count = st.session_state.count + 5
 
 
 left, middle, right = st.columns(3)
-with left:
-    if st.button("Plain variable +1"):
-        broken_count += 1
-    st.write("Plain variable:", broken_count)
-with middle:
-    st.button("Session state +1", on_click=increment_by, args=(1,))
-    st.write("Session state:", st.session_state.count)
-with right:
-    st.button("Session state +5", on_click=increment_by, args=(5,))
-    if st.button("Reset"):
-        st.session_state.count = 0
+
+if left.button("Plain variable +1"):
+    broken_count = broken_count + 1
+left.write("Plain variable:")
+left.write(broken_count)
+
+if middle.button("Session state +1"):
+    st.session_state.count = st.session_state.count + 1
+middle.write("Session state:")
+middle.write(st.session_state.count)
+
+right.button("Session state +5", on_click=add_five)
+if right.button("Reset"):
+    st.session_state.count = 0
 
 st.caption("Click the left button repeatedly. It never gets past 1.")
 
-# ---------------------------------------------------------------- keys
 st.header("4. Widget keys")
 
 st.text_input("Type something", key="typed")
-st.write("Read back from session state:", st.session_state.get("typed", ""))
+st.write("Read back from session state:", st.session_state["typed"])
 
-# ---------------------------------------------------------------- forms
 st.header("5. Forms")
 
 st.markdown(
@@ -103,13 +118,24 @@ st.markdown(
     "query fires once rather than once per widget."
 )
 
+item_ids = []
+for item in items:
+    item_ids.append(item["Item_ID"])
+item_ids.sort()
+
 with st.form("item_lookup"):
-    item_id = st.selectbox("Item", sorted(items["Item_ID"]))
+    wanted = st.selectbox("Item", item_ids)
     show_all_columns = st.checkbox("Show every column")
     submitted = st.form_submit_button("Look it up")
 
 if submitted:
-    row = items[items["Item_ID"] == item_id]
-    st.dataframe(row if show_all_columns
-                 else row[["Item_ID", "Item_Description", "Item_Price"]],
-                 width="stretch")
+    for item in items:
+        if item["Item_ID"] == wanted:
+            if show_all_columns:
+                st.write(item)
+            else:
+                st.write({
+                    "Item_ID": item["Item_ID"],
+                    "Item_Description": item["Item_Description"],
+                    "Item_Price": item["Item_Price"],
+                })
