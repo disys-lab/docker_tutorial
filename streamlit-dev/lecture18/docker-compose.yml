@@ -3,8 +3,9 @@
 #
 #   cd lecture18
 #   docker compose up -d
-#   docker compose exec streamlit python app/seed.py      # once
 #   open http://localhost:8505
+#
+# The first page you see offers a button to load the data into MySQL and Redis.
 #
 # lecture16/ and lecture17/ hold smaller examples that run the same base
 # image with a different command.
@@ -21,6 +22,11 @@ services:
       - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-pOSUGoPokes"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   redis:
     image: redis:latest
@@ -30,6 +36,11 @@ services:
       - "6381:6379"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   streamlit:
     image: ghcr.io/disys-lab/streamlit-base:latest
@@ -41,8 +52,10 @@ services:
       - ./app:/usr/src/app/app
       - ../../mysql-dev/data:/usr/src/app/data:ro
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     command: >
       streamlit run app/main.py
         --server.port 8501
