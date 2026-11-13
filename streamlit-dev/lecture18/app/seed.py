@@ -1,13 +1,19 @@
 """Load the warehouse CSVs into MySQL, and a few keys into Redis.
 
-Run this once after the stack comes up:
+The stack runs this automatically when the streamlit container starts, so you
+do not normally have to. Run it yourself to reload the data:
 
-    docker compose exec streamlit python app/seed.py
+    docker compose exec streamlit python app/seed.py          # reload
+    docker compose exec streamlit python app/seed.py --if-empty
 
-It is safe to run again; every table is dropped and rebuilt.
+With --if-empty it does nothing when the database already holds data, which is
+how the container start-up calls it. Without the flag every table is dropped
+and rebuilt.
 """
 import csv
 import os
+import sys
+import time
 
 import pymysql
 import redis
@@ -75,14 +81,44 @@ SCHEMA = {
 DROP_ORDER = ["order_item", "customerorder", "item", "customer"]
 
 
+def wait_for_mysql(timeout=90):
+    """Block until MySQL accepts a connection, or give up after timeout seconds."""
+    started = time.time()
+    while True:
+        try:
+            pymysql.connect(**MYSQL).close()
+            return
+        except pymysql.err.OperationalError:
+            if time.time() - started > timeout:
+                raise
+            time.sleep(1)
+
+
+def already_seeded():
+    conn = pymysql.connect(**MYSQL)
+    cur = conn.cursor()
+    cur.execute("SHOW TABLES LIKE 'customer'")
+    if cur.fetchone() is None:
+        conn.close()
+        return False
+    cur.execute("SELECT COUNT(*) FROM customer")
+    rows = cur.fetchone()[0]
+    conn.close()
+    if rows > 0:
+        return True
+    else:
+        return False
+
 def read_csv(name):
     with open(f"{DATA}/{name}", newline="") as f:
         return list(csv.DictReader(f))
 
 
 def seed_mysql():
+    """Rebuild the four tables and return a dict of table name to row count."""
     conn = pymysql.connect(**MYSQL)
     cur = conn.cursor()
+    counts = {}
 
     for table in DROP_ORDER:
         cur.execute(f"DROP TABLE IF EXISTS {table}")
@@ -95,14 +131,16 @@ def seed_mysql():
             f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({placeholders})",
             [tuple(row[c] for c in cols) for row in rows],
         )
-        print(f"  {table:<14} {len(rows):>4} rows")
+        counts[table] = len(rows)
 
     conn.commit()
     cur.close()
     conn.close()
+    return counts
 
 
 def seed_redis():
+    """Rebuild the Redis keys and return how many there are."""
     r = redis.Redis(host="redis", port=6379, decode_responses=True)
     r.flushdb()
 
@@ -111,12 +149,25 @@ def seed_redis():
         r.sadd(f"items:description:{row['Item_Description']}", row["Item_ID"])
         r.zadd("items:by_sales", {row["Item_ID"]: float(row["Item_AnnualSales"])})
 
-    print(f"  redis keys     {r.dbsize():>4}")
+    return r.dbsize()
+
+
+def load_everything():
+    """Load both stores. Returns (table counts, redis key count)."""
+    wait_for_mysql()
+    return seed_mysql(), seed_redis()
 
 
 if __name__ == "__main__":
+    wait_for_mysql()
+
+    if "--if-empty" in sys.argv and already_seeded():
+        print("database already holds data, nothing to do")
+        sys.exit(0)
+
     print("seeding MySQL")
-    seed_mysql()
+    for table, n in seed_mysql().items():
+        print(f"  {table:<14} {n:>4} rows")
     print("seeding Redis")
-    seed_redis()
+    print(f"  redis keys     {seed_redis():>4}")
     print("done")

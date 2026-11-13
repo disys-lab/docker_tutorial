@@ -24,17 +24,22 @@ docker compose up -d
 Then open the port from the table above.
 
 Lectures 16 and 17 read the warehouse CSVs directly and need no database, so
-each is a single service. Lecture 18 also starts MySQL and Redis, and has to be
-seeded once:
+each is a single service. Lecture 18 also starts MySQL and Redis:
 
 ```bash
 cd lecture18
 docker compose up -d
-docker compose exec streamlit python app/seed.py      # once, the first time
 ```
 
-The seed step loads the warehouse CSVs into MySQL and the item data into Redis.
-It is safe to run again; every table is dropped and rebuilt.
+Its database starts empty. The page offers a **Load the warehouse data** button,
+which loads the CSVs into MySQL and the item data into Redis. A **Reload the
+data** control in the sidebar rebuilds everything from scratch.
+
+You can also load it from the command line if you prefer:
+
+```bash
+docker compose exec streamlit python app/seed.py
+```
 
 ## How the examples share an image
 
