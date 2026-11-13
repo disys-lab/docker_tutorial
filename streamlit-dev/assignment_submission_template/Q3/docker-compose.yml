@@ -1,0 +1,22 @@
+# Q3. Start it from inside this folder:
+#
+#   docker compose up -d
+#   open http://localhost:8514
+#
+# Stop it again with: docker compose down
+
+services:
+  streamlit:
+    image: ghcr.io/disys-lab/streamlit-base:latest
+    container_name: assignment4-q3
+    restart: always
+    ports:
+      - "8514:8501"
+    volumes:
+      - ./app:/usr/src/app/app
+      - ../data:/usr/src/app/data:ro
+    command: >
+      streamlit run app/main.py
+        --server.port 8501
+        --server.address 0.0.0.0
+        --server.headless true
