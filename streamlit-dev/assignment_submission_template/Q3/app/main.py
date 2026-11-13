@@ -26,14 +26,12 @@ readings = load_reactor("data/reactor_sample_5k.csv")
 st.title("Question 3: Break the Rules, Then Fix Them")
 
 
-# ---------------------------------------------------------------- the bad one
 st.header("The broken chart")
 st.write("TODO: name the three things that are wrong with it.")
 
 # TODO: draw a chart that breaks three of the rules from Lecture 15.
 
 
-# ---------------------------------------------------------------- the fix
 st.header("The fixed chart")
 st.write("TODO: say what you changed for each of the three faults.")
 

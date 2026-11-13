@@ -29,7 +29,6 @@ readings = load_reactor("data/reactor_sample_5k.csv")
 st.title("Question 2: Three Charts")
 
 
-# ---------------------------------------------------------------- over time
 st.header("1. Over time")
 st.write("TODO: the question this chart answers, in one sentence.")
 st.caption("TODO: which dataset this uses.")
@@ -40,7 +39,6 @@ st.caption("TODO: which dataset this uses.")
 # st.line_chart(chart_rows, x="X", y="Y")
 
 
-# ---------------------------------------------------------------- categories
 st.header("2. Comparing categories")
 st.write("TODO: the question this chart answers, in one sentence.")
 st.caption("TODO: which dataset this uses.")
@@ -55,7 +53,6 @@ st.caption("TODO: which dataset this uses.")
 #         counts[name] = 1
 
 
-# ---------------------------------------------------------------- your choice
 st.header("3. Your own chart")
 st.write("TODO: the question this chart answers, in one sentence.")
 st.caption("TODO: which dataset this uses.")

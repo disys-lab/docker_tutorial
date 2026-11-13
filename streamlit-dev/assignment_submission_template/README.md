@@ -13,21 +13,21 @@ once.
 
 ## Running one
 
-Go into the folder and start it:
+Go into the folder to start it as we have been doing. Use `cd` command to navigate to your folder and then execute the following command.
 
 ```bash
-cd Q1-customer
 docker compose up -d
 ```
 
-Then open the port from the table above. Stop it again with:
+To view your visualization, open the link from the table above. 
+
+If you want to bring down this question containers, you can stop it again with:
 
 ```bash
 docker compose down
 ```
 
-Repeat for each folder you are working on. Nothing is built, so the first start
-only has to pull the course image.
+Repeat for each folder you are working on. Remember to bring down the container of each question before starting the next question.
 
 ## Editing
 
