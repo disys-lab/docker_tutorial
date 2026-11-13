@@ -104,8 +104,10 @@ def already_seeded():
     cur.execute("SELECT COUNT(*) FROM customer")
     rows = cur.fetchone()[0]
     conn.close()
-    return rows > 0
-
+    if rows > 0:
+        return True
+    else:
+        return False
 
 def read_csv(name):
     with open(f"{DATA}/{name}", newline="") as f:

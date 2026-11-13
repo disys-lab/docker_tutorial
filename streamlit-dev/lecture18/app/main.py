@@ -11,7 +11,7 @@ import redis
 import streamlit as st
 
 from seed import already_seeded, load_everything
-
+st.session_state.last_load = None
 st.set_page_config(page_title="Warehouse Dashboard", layout="wide")
 
 
@@ -53,38 +53,33 @@ def get_orders():
     return orders
 
 
-# ---------------------------------------------------------------- loading
-# A button is True only on the run where it was clicked, so the work goes
-# inside the if. The script then runs again from the top.
-def load_button(label, key):
-    if not st.button(label, key=key, type="primary"):
-        return False
+
+def reload_data():
     with st.spinner("Loading the warehouse data..."):
         tables, keys = load_everything()
     st.session_state.last_load = (tables, keys)
-    return True
+    return True, sum(tables.values()), keys
 
 
-try:
-    seeded = already_seeded()
-except Exception as exc:                                  # noqa: BLE001
-    st.title("Warehouse Dashboard")
-    st.error("Cannot reach MySQL. Is the stack up?")
-    st.exception(exc)
+
+
+
+with st.sidebar:
+    #watch what happens here:
+    #first we setup the button
+    button_clicked = st.button("Reload the data", key="reload")
+    data_read_status = False
+    if button_clicked:
+        data_read_status, sum_table_rows, redis_keys = reload_data()
+    if data_read_status:
+        st.success(f"Loaded {sum_table_rows} rows and {redis_keys} Redis keys.")
+    else:
+        st.warning("No data was loaded since the last time this button was clicked.")
+
+if not already_seeded():
+    st.warning("The database is empty. Press Reload the data.")
     st.stop()
 
-if not seeded:
-    st.title("Warehouse Dashboard")
-    st.warning("The database is empty. Load the data to get started.")
-    if load_button("Load the warehouse data", "load_first"):
-        st.rerun()
-    st.stop()
-
-if "last_load" in st.session_state:
-    tables, keys = st.session_state.pop("last_load")
-    st.success(f"Loaded {sum(tables.values())} rows and {keys} Redis keys.")
-
-# ---------------------------------------------------------------- sidebar
 orders = get_orders()
 
 carriers = []
@@ -101,14 +96,6 @@ st.sidebar.title("Filters")
 chosen_carriers = st.sidebar.multiselect("Carrier", carriers, default=carriers)
 chosen_states = st.sidebar.multiselect("Customer state", states, default=states)
 
-st.sidebar.divider()
-st.sidebar.caption("Reloading drops every table and rebuilds it from the CSVs.")
-confirmed = st.sidebar.checkbox("Yes, reload the data")
-with st.sidebar:
-    if confirmed and load_button("Reload the data", "reload"):
-        st.rerun()
-
-# ---------------------------------------------------------------- the page
 st.title("Warehouse Dashboard")
 st.caption("MySQL for the orders, Redis for the item rankings. "
            "Every figure is read fresh on each interaction.")
