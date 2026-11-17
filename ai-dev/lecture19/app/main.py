@@ -1,0 +1,167 @@
+"""A chatbot that can read the warehouse data, and draw it.
+
+Run it from inside streamlit-dev/lecture19:
+
+    docker compose up -d
+
+Then open http://localhost:8507, put your key and endpoint in the sidebar,
+and ask something like "which carrier shipped the most orders?".
+
+Two columns. The chat is on the left, the chart on the right. The model
+never touches the data itself. It asks the MCP server for numbers, and this
+file draws them with the same chart calls we used in Lectures 16 to 18.
+"""
+import json
+
+import streamlit as st
+from openai import OpenAI
+
+import mcp_client
+
+st.set_page_config(page_title="Warehouse Chat", layout="wide")
+
+INSTRUCTIONS = """You answer questions about a warehouse.
+
+You cannot see the data. Use the tools to look at it. Call columns before
+summarize so you use real column names, and never guess a number. When a
+tool gives you rows, say what they show in one or two sentences. Do not
+repeat the whole table back, because the user can already see the chart.
+"""
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "chart" not in st.session_state:
+    st.session_state.chart = None
+
+
+with st.sidebar:
+    st.title("Your LLM")
+    base_url = st.text_input("Endpoint", value="https://api.openai.com/v1")
+    api_key = st.text_input("Key", type="password")
+    model = st.text_input("Model", value="gpt-4o-mini")
+
+    st.divider()
+    use_tools = st.checkbox("Let the model use the tools", value=True)
+    st.caption("Turn this off to see what the model says when it cannot "
+               "read the data.")
+
+    if st.button("Clear the chat"):
+        st.session_state.messages = []
+        st.session_state.chart = None
+
+if not api_key:
+    st.info("Put your key in the sidebar to start.")
+    st.stop()
+
+client = OpenAI(base_url=base_url, api_key=api_key)
+
+
+left, right = st.columns(2)
+
+with left:
+    st.subheader("Chat")
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    question = st.chat_input("Ask about the warehouse data")
+
+
+if question:
+    st.session_state.messages.append({"role": "user", "content": question})
+
+    with left:
+        with st.chat_message("user"):
+            st.markdown(question)
+
+    # Everything the model gets to see this turn.
+    conversation = [{"role": "system", "content": INSTRUCTIONS}]
+    for message in st.session_state.messages:
+        conversation.append({"role": message["role"],
+                             "content": message["content"]})
+
+    answer = ""
+    try:
+        if use_tools:
+            tools = mcp_client.list_tools()
+            reply = client.chat.completions.create(
+                model=model, messages=conversation, tools=tools)
+        else:
+            reply = client.chat.completions.create(
+                model=model, messages=conversation)
+
+        sent_back = reply.choices[0].message
+
+        # The model does not run anything. If it wants a tool, it says so and
+        # stops, and it is this file that goes and runs it.
+        if sent_back.tool_calls:
+            wanted = sent_back.tool_calls[0]
+            arguments = json.loads(wanted.function.arguments)
+
+            with left:
+                with st.chat_message("assistant"):
+                    st.caption(f"Calling {wanted.function.name}")
+                    st.code(json.dumps(arguments, indent=2), language="json")
+
+            with st.spinner("Asking the MCP server..."):
+                tool_output = mcp_client.call_tool(wanted.function.name,
+                                                   arguments)
+
+            # Hand the result back and let the model write the answer.
+            conversation.append({
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": wanted.id,
+                    "type": "function",
+                    "function": {"name": wanted.function.name,
+                                 "arguments": wanted.function.arguments},
+                }],
+            })
+            conversation.append({"role": "tool", "tool_call_id": wanted.id,
+                                 "content": tool_output})
+
+            second = client.chat.completions.create(model=model,
+                                                    messages=conversation)
+            answer = second.choices[0].message.content
+
+            # Keep it for the right hand column, if there is anything to draw.
+            result = json.loads(tool_output)
+            if "rows" in result:
+                st.session_state.chart = {
+                    "called": wanted.function.name,
+                    "arguments": arguments,
+                    "result": result,
+                }
+        else:
+            answer = sent_back.content or ""
+
+    except Exception as problem:
+        with left:
+            st.error(f"That did not work: {problem}")
+        st.stop()
+
+    st.session_state.messages.append({"role": "assistant", "content": answer})
+    with left:
+        with st.chat_message("assistant"):
+            st.markdown(answer)
+
+
+with right:
+    st.subheader("Chart")
+
+    if st.session_state.chart is None:
+        st.info("Ask a question and whatever the model looks up turns up here.")
+    else:
+        drawing = st.session_state.chart
+        result = drawing["result"]
+
+        st.caption("The model asked for this:")
+        st.code(f"{drawing['called']}({json.dumps(drawing['arguments'])})",
+                language="python")
+
+        if result["chart"] == "line":
+            st.line_chart(result["rows"], x=result["x"], y=result["y"])
+        else:
+            st.bar_chart(result["rows"], x=result["x"], y=result["y"])
+
+        with st.expander("Show the rows behind this"):
+            st.dataframe(result["rows"], width="stretch", hide_index=True)

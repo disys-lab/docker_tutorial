@@ -1,0 +1,7 @@
+# Pinned on purpose. mcp 2.x renamed FastMCP to MCPServer, so a later major
+# version will not run the Lecture 19 code, and the cryptography wheels after
+# 46 crash on arm64 Macs with an illegal instruction the moment MCP touches
+# them. Leave these alone.
+mcp==2.3.0
+openai==3.52.0
+cryptography==46.0.3

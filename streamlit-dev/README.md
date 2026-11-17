@@ -11,8 +11,12 @@ has to be built; the image is pulled.
 | `lecture16/` | Text, tables, metrics, the built-in charts | http://localhost:8503 |
 | `lecture17/` | Widgets, layout, session state, forms      | http://localhost:8504 |
 | `lecture18/` | The warehouse dashboard, with MySQL and Redis | http://localhost:8505 |
+| `charts/`    | The same data drawn with every chart tool   | http://localhost:8506 |
 
 They use different published ports, so they can all run at once.
+
+Lecture 19 builds on this material but lives in `../ai-dev/`, because it needs
+an MCP SDK and an LLM client on top of the base image.
 
 ## Running an example
 
@@ -61,8 +65,9 @@ file, and change the script name and the published port.
 
 ## The base image
 
-Source is in `base/`. It is Python 3.12 with `streamlit`, `pandas`, `pymysql`
-and `redis` preinstalled, and no application code. Rebuild and publish with:
+Source is in `base/`. It is Python 3.12 with `streamlit`, `pandas`, `pymysql`,
+`redis`, `plotly` and `matplotlib` preinstalled, and no application code.
+Rebuild and publish with:
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
@@ -71,6 +76,9 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 The `--platform` flag matters: it builds for both Intel and Apple Silicon, so
 the image works on every student machine rather than only the one that built it.
+
+`ai-dev` layers its own image on top of this one, so rebuild that too when this
+changes.
 
 ## Editing while it runs
 
@@ -87,6 +95,8 @@ Chosen so nothing in this repo collides:
 | Lecture 16 | 8503 | 8501 (`networking`) |
 | Lecture 17 | 8504 | |
 | Lecture 18 | 8505 | |
+| Charts | 8506 | |
+| | | 8507, 8600 (`ai-dev`) |
 | MySQL | 3307 | 3306 (`mysql-dev`) |
 | Redis | 6381 | 6380 (`redis-dev`) |
 
