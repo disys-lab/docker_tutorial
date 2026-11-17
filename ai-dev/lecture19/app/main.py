@@ -41,10 +41,10 @@ if "chart" not in st.session_state:
 
 
 with st.sidebar:
-    st.title("Your LLM")
-    base_url = st.text_input("Endpoint", value="https://api.openai.com/v1")
+    st.title("IEM 4723: LLM API Endpoint Credentials")
+    base_url = st.text_input("Endpoint", value="https://api-cypress-ai.disyslab.dev/v1")
     api_key = st.text_input("Key", type="password")
-    model = st.text_input("Model", value="gpt-4o-mini")
+    model = st.selectbox("Choose Your Model",("qwen3-coder-next","qwen3.6-35b-nonthink")) #st.text_input("Model", value="qwen3-coder-next")
 
     st.divider()
     use_tools = st.checkbox("Let the model use the tools", value=True)
@@ -99,7 +99,7 @@ if question:
         # it is this file that goes and runs it and asks again. One question
         # usually takes two turns, because it looks up the column names
         # before it summarises anything. Four is plenty.
-        for turn in range(4):
+        for turn in range(10):
             if tools:
                 reply = client.chat.completions.create(
                     model=model, messages=conversation, tools=tools)
@@ -152,8 +152,8 @@ if question:
                         "result": result,
                     }
         else:
-            answer = ("I kept asking for tools and never got to an answer. "
-                      "Try asking in a simpler way.")
+            answer = ("I ran out of turns talking to the AI model. "
+                      "Try asking a simpler question.")
 
     except Exception as problem:
         with left:

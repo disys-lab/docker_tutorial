@@ -20,6 +20,12 @@ FILES = {
     "customers": "data/orders/Customer.csv",
     "orders": "data/orders/CustomerOrder.csv",
     "items": "data/orders/Item.csv",
+    "vendors": "data/orders/Vendor.csv",
+    "shipmentinfo": "data/orders/Shipment_Info.csv",
+    "pallet": "data/orders/Pallet.csv",
+    "shipment": "data/orders/Shipment.csv",
+    "orderitem": "data/orders/Order_Item.csv",
+    "cases": "data/orders/Cases.csv",
 }
 
 mcp = MCPServer("warehouse")
