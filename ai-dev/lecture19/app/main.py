@@ -22,10 +22,16 @@ st.set_page_config(page_title="Warehouse Chat", layout="wide")
 
 INSTRUCTIONS = """You answer questions about a warehouse.
 
-You cannot see the data. Use the tools to look at it. Call columns before
-summarize so you use real column names, and never guess a number. When a
-tool gives you rows, say what they show in one or two sentences. Do not
-repeat the whole table back, because the user can already see the chart.
+You cannot see the data, so use the tools every time. Call columns first if
+you are unsure of a name, then call summarize. Never give a number you did
+not get from a tool.
+
+You do not draw anything. The chart is drawn from your summarize call, so
+call it whenever a chart is wanted, even if the same numbers already came up
+earlier in this conversation. Talking about a chart does not make one.
+
+Say what the rows show in one or two sentences. Do not list them back, as
+the user can already see them.
 """
 
 if "messages" not in st.session_state:
@@ -56,6 +62,11 @@ if not api_key:
 client = OpenAI(base_url=base_url, api_key=api_key)
 
 
+# This one goes at the top level and not inside a column. Streamlit pins it to
+# the bottom of the page when you call it out here. Called inside the column it
+# is drawn where it sits, which puts it above everything this run adds below.
+question = st.chat_input("Ask about the warehouse data")
+
 left, right = st.columns(2)
 
 with left:
@@ -63,7 +74,6 @@ with left:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-    question = st.chat_input("Ask about the warehouse data")
 
 
 if question:
@@ -81,58 +91,69 @@ if question:
 
     answer = ""
     try:
+        tools = None
         if use_tools:
             tools = mcp_client.list_tools()
-            reply = client.chat.completions.create(
-                model=model, messages=conversation, tools=tools)
-        else:
-            reply = client.chat.completions.create(
-                model=model, messages=conversation)
 
-        sent_back = reply.choices[0].message
+        # The model does not run anything. It asks for a tool and stops, and
+        # it is this file that goes and runs it and asks again. One question
+        # usually takes two turns, because it looks up the column names
+        # before it summarises anything. Four is plenty.
+        for turn in range(4):
+            if tools:
+                reply = client.chat.completions.create(
+                    model=model, messages=conversation, tools=tools)
+            else:
+                reply = client.chat.completions.create(
+                    model=model, messages=conversation)
 
-        # The model does not run anything. If it wants a tool, it says so and
-        # stops, and it is this file that goes and runs it.
-        if sent_back.tool_calls:
-            wanted = sent_back.tool_calls[0]
-            arguments = json.loads(wanted.function.arguments)
+            sent_back = reply.choices[0].message
 
-            with left:
-                with st.chat_message("assistant"):
-                    st.caption(f"Calling {wanted.function.name}")
-                    st.code(json.dumps(arguments, indent=2), language="json")
+            # Nothing more it wants, so this is the answer.
+            if not sent_back.tool_calls:
+                answer = sent_back.content or ""
+                break
 
-            with st.spinner("Asking the MCP server..."):
-                tool_output = mcp_client.call_tool(wanted.function.name,
-                                                   arguments)
-
-            # Hand the result back and let the model write the answer.
-            conversation.append({
-                "role": "assistant",
-                "tool_calls": [{
-                    "id": wanted.id,
+            # Write down what it asked for, every call, or the next request
+            # is rejected for having a question with no answer.
+            asked_for = []
+            for call in sent_back.tool_calls:
+                asked_for.append({
+                    "id": call.id,
                     "type": "function",
-                    "function": {"name": wanted.function.name,
-                                 "arguments": wanted.function.arguments},
-                }],
-            })
-            conversation.append({"role": "tool", "tool_call_id": wanted.id,
-                                 "content": tool_output})
+                    "function": {"name": call.function.name,
+                                 "arguments": call.function.arguments},
+                })
+            conversation.append({"role": "assistant", "tool_calls": asked_for})
 
-            second = client.chat.completions.create(model=model,
-                                                    messages=conversation)
-            answer = second.choices[0].message.content
+            for call in sent_back.tool_calls:
+                arguments = json.loads(call.function.arguments)
 
-            # Keep it for the right hand column, if there is anything to draw.
-            result = json.loads(tool_output)
-            if "rows" in result:
-                st.session_state.chart = {
-                    "called": wanted.function.name,
-                    "arguments": arguments,
-                    "result": result,
-                }
+                with left:
+                    with st.chat_message("assistant"):
+                        st.caption(f"Calling {call.function.name}")
+                        st.code(json.dumps(arguments, indent=2),
+                                language="json")
+
+                with st.spinner(f"Running {call.function.name}..."):
+                    tool_output = mcp_client.call_tool(call.function.name,
+                                                       arguments)
+
+                conversation.append({"role": "tool", "tool_call_id": call.id,
+                                     "content": tool_output})
+
+                # Keep it for the right hand column, if there is anything
+                # to draw. columns and list_datasets have no rows.
+                result = json.loads(tool_output)
+                if "rows" in result:
+                    st.session_state.chart = {
+                        "called": call.function.name,
+                        "arguments": arguments,
+                        "result": result,
+                    }
         else:
-            answer = sent_back.content or ""
+            answer = ("I kept asking for tools and never got to an answer. "
+                      "Try asking in a simpler way.")
 
     except Exception as problem:
         with left:

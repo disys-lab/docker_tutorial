@@ -48,9 +48,14 @@ The datasets are `customers`, `orders` and `items`, read straight from
 
 The model never runs anything. It reads the tool descriptions, decides which
 tool it wants and what to pass, and then **stops and says so**. It is
-`app/main.py` that goes and runs the tool, and hands the answer back for the
-model to put into words. The tool call appears above the chart so you can see
-exactly what it asked for.
+`app/main.py` that goes and runs the tool, hands the result back, and asks
+again. The tool call appears above the chart so you can see exactly what it
+asked for.
+
+One question usually takes two turns, because the model looks up the column
+names before it summarises anything. The loop in `main.py` stops as soon as the
+model answers in words instead of asking for another tool, and gives up after
+four turns either way.
 
 Nothing in `app/` names a tool. The list comes from the server at runtime, so
 adding a fourth tool to `server.py` is enough for the model to start using it.
