@@ -1,0 +1,20 @@
+# Every chart tool Streamlit supports, side by side. Start it from here:
+#
+#   docker compose up -d
+#   open http://localhost:8506
+
+services:
+  streamlit:
+    image: ghcr.io/disys-lab/streamlit-base:latest
+    container_name: streamlit-charts
+    restart: always
+    ports:
+      - "8506:8501"
+    volumes:
+      - ./app:/usr/src/app/app
+      - ../../mysql-dev/data:/usr/src/app/data:ro
+    command: >
+      streamlit run app/main.py
+        --server.port 8501
+        --server.address 0.0.0.0
+        --server.headless true
