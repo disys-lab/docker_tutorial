@@ -1,0 +1,45 @@
+# Lecture 19 example: a chatbot that reads the warehouse data through MCP.
+#
+#   cd lecture19
+#   docker compose up -d
+#   open http://localhost:8507
+#
+# Two services from the same image. One runs the MCP server, the other runs
+# Streamlit. The app finds the server at http://mcp:8000 because "mcp" is
+# the service name below.
+#
+# The image is streamlit-ai-base rather than streamlit-base, because this
+# lecture also needs the MCP SDK and an LLM client. Source is in ../base/.
+#
+# Plain depends_on is enough here. It only waits for the container to start,
+# not for the server inside to be ready, but the app does not call the server
+# until somebody types a question, which is long after both are up.
+
+services:
+  mcp:
+    image: ghcr.io/disys-lab/streamlit-ai-base:latest
+    container_name: streamlit-mcp-server
+    restart: always
+    ports:
+      - "8600:8000"
+    volumes:
+      - ./mcp-server:/usr/src/app/mcp-server
+      - ../../mysql-dev/data:/usr/src/app/data:ro
+    command: python mcp-server/server.py
+
+  streamlit:
+    image: ghcr.io/disys-lab/streamlit-ai-base:latest
+    container_name: streamlit-lecture19
+    restart: always
+    ports:
+      - "8507:8501"
+    volumes:
+      - ./app:/usr/src/app/app
+      - ../../mysql-dev/data:/usr/src/app/data:ro
+    depends_on:
+      - mcp
+    command: >
+      streamlit run app/main.py
+        --server.port 8501
+        --server.address 0.0.0.0
+        --server.headless true
