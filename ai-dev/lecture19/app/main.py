@@ -62,6 +62,11 @@ if not api_key:
 client = OpenAI(base_url=base_url, api_key=api_key)
 
 
+# This one goes at the top level and not inside a column. Streamlit pins it to
+# the bottom of the page when you call it out here. Called inside the column it
+# is drawn where it sits, which puts it above everything this run adds below.
+question = st.chat_input("Ask about the warehouse data")
+
 left, right = st.columns(2)
 
 with left:
@@ -69,7 +74,6 @@ with left:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-    question = st.chat_input("Ask about the warehouse data")
 
 
 if question:
